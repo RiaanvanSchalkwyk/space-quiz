@@ -705,23 +705,63 @@
     const finalScoreEl = document.getElementById("final-score");
     const restartButton = document.getElementById("restart-button");
 
+    let activeQuestions = [];
     let questionIndex = 0;
     let score = 0;
     let answered = false;
 
-    function renderQuestion() {
-      const current = questions[questionIndex];
+    function shuffleArray(items) {
+      const copy = [...items];
+
+      for (let i = copy.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+
+      return copy;
+    }
+
+    function buildShuffledRun() {
+      return shuffleArray(questions).map((question) => {
+        const answerEntries = shuffleArray(question.answers.map((answer, index) => ({ answer, index })));
+        const correctIndex = answerEntries.findIndex(({ index }) => index === question.correct);
+
+        return {
+          prompt: question.prompt,
+          fact: question.fact,
+          answers: answerEntries.map(({ answer }) => answer),
+          correct: correctIndex
+        };
+      });
+    }
+
+    function startFreshRun() {
+      activeQuestions = buildShuffledRun();
+      questionIndex = 0;
+      score = 0;
       answered = false;
-      questionCountEl.textContent = `Question ${questionIndex + 1} of ${questions.length}`;
+      scoreEl.textContent = "0";
+      resultsEl.hidden = true;
+      questionView.hidden = false;
+      renderQuestion();
+      questionEl.focus({ preventScroll: true });
+    }
+
+    function renderQuestion() {
+      const current = activeQuestions[questionIndex];
+      answered = false;
+      questionCountEl.textContent = `Question ${questionIndex + 1} of ${activeQuestions.length}`;
       questionEl.textContent = current.prompt;
-      progressLabelEl.textContent = `${Math.round((questionIndex / questions.length) * 100)}% complete`;
+      progressLabelEl.textContent = `${Math.round((questionIndex / activeQuestions.length) * 100)}% complete`;
+      progressTrack.setAttribute("aria-valuemin", "0");
+      progressTrack.setAttribute("aria-valuemax", String(activeQuestions.length));
       progressTrack.setAttribute("aria-valuenow", String(questionIndex));
-      progressFill.style.transform = `scaleX(${questionIndex / questions.length})`;
+      progressFill.style.transform = `scaleX(${questionIndex / activeQuestions.length})`;
       feedbackEl.hidden = true;
       feedbackEl.className = "feedback";
       nextRow.hidden = true;
       nextButton.querySelector("span").textContent =
-        questionIndex === questions.length - 1 ? "See my results" : "Next question";
+        questionIndex === activeQuestions.length - 1 ? "See my results" : "Next question";
       answersEl.replaceChildren();
 
       current.answers.forEach((answer, index) => {
@@ -749,7 +789,7 @@
     function chooseAnswer(selectedIndex) {
       if (answered) return;
       answered = true;
-      const current = questions[questionIndex];
+      const current = activeQuestions[questionIndex];
       const isCorrect = selectedIndex === current.correct;
       const answerButtons = [...answersEl.querySelectorAll(".answer")];
 
@@ -781,9 +821,9 @@
       feedbackCopyEl.textContent = current.fact;
       feedbackEl.hidden = false;
       nextRow.hidden = false;
-      progressLabelEl.textContent = `${Math.round(((questionIndex + 1) / questions.length) * 100)}% complete`;
+      progressLabelEl.textContent = `${Math.round(((questionIndex + 1) / activeQuestions.length) * 100)}% complete`;
       progressTrack.setAttribute("aria-valuenow", String(questionIndex + 1));
-      progressFill.style.transform = `scaleX(${(questionIndex + 1) / questions.length})`;
+      progressFill.style.transform = `scaleX(${(questionIndex + 1) / activeQuestions.length})`;
       nextButton.focus({ preventScroll: true });
     }
 
@@ -791,19 +831,20 @@
       questionView.hidden = true;
       resultsEl.hidden = false;
       progressLabelEl.textContent = "Mission complete";
-      progressTrack.setAttribute("aria-valuenow", String(questions.length));
+      progressTrack.setAttribute("aria-valuemax", String(activeQuestions.length));
+      progressTrack.setAttribute("aria-valuenow", String(activeQuestions.length));
       progressFill.style.transform = "scaleX(1)";
       finalScoreEl.textContent = String(score);
 
-      if (score === 10) {
+      if (score === activeQuestions.length) {
         resultEmojiEl.textContent = "🚀";
         resultTitleEl.textContent = "A perfect orbit!";
         resultCopyEl.textContent = "You nailed every mission. The cosmos is lucky to have you.";
-      } else if (score >= 7) {
+      } else if (score >= Math.ceil(activeQuestions.length * 0.7)) {
         resultEmojiEl.textContent = "🌟";
         resultTitleEl.textContent = "Out-of-this-world work!";
         resultCopyEl.textContent = "Your space smarts are shining bright. Keep following that curiosity.";
-      } else if (score >= 4) {
+      } else if (score >= Math.ceil(activeQuestions.length * 0.4)) {
         resultEmojiEl.textContent = "🪐";
         resultTitleEl.textContent = "Nice trip through the stars!";
         resultCopyEl.textContent = "Every explorer learns something new out there. Ready for another orbit?";
@@ -817,7 +858,7 @@
 
     nextButton.addEventListener("click", () => {
       if (!answered) return;
-      if (questionIndex === questions.length - 1) {
+      if (questionIndex === activeQuestions.length - 1) {
         showResults();
         return;
       }
@@ -827,16 +868,10 @@
     });
 
     restartButton.addEventListener("click", () => {
-      questionIndex = 0;
-      score = 0;
-      scoreEl.textContent = "0";
-      resultsEl.hidden = true;
-      questionView.hidden = false;
-      renderQuestion();
-      questionEl.focus({ preventScroll: true });
+      startFreshRun();
     });
 
-    renderQuestion();
+    startFreshRun();
   </script>
 </body>
 </html>
